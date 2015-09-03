@@ -1,0 +1,18 @@
+_require "basis.smi"
+
+functor BigEndian(X: sig
+                      type t
+                      val sub: t * int -> word8
+                 end) = struct
+    type t
+    val read32: t * int  -> word
+end
+
+structure LittleEndian(X: sig
+                      type t
+                      val sub: t * int -> word8
+                 end) = struct
+    type t
+    val read32: t * int -> word
+end
+

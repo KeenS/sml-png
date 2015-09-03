@@ -1,0 +1,5 @@
+_require "basis.smi"
+
+structure Adler32 = struct
+    val calc: word8 vector -> word
+end

@@ -1,0 +1,5 @@
+_require "basis.smi"
+
+structure CRC = struct
+    val calcCRC: word8 vector -> word
+end

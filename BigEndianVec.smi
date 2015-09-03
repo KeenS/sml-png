@@ -1,0 +1,7 @@
+_require "basis.smi"
+_require "ByteOrder.smi"
+
+structure BigEndianVec = struct
+    type t = word8 vector
+    val read32: t * int -> word
+end

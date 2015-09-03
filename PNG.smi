@@ -1,0 +1,6 @@
+_require "basis.smi"
+_require "ByteOrder.smi"
+_require "CRC.smi"
+
+structure PNG = struct
+end
