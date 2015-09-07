@@ -1,5 +1,9 @@
 _require "basis.smi"
 _require "ByteOrder.smi"
+_require "ZLib.smi"
+_require "Buffer.smi"
+_require "Ext.smi"
+_require "BitReader.smi"
 
 structure Deflate = struct
 end

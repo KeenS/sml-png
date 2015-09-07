@@ -19,7 +19,7 @@ structure CRC = struct
         loop 0
     end
     val table = make_table()
-    fun calcCRC vec = let
+    fun calc vec = let
         val len = Vector.length vec
         fun loop crc i = let
             val index = Word.toInt (andb((xorb(crc, Vector.sub(vec, i))), 0wxff))

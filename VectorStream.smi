@@ -1,0 +1,6 @@
+_require "basis.smi"
+
+structure VectorStream =
+struct
+    
+end

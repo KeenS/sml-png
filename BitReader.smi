@@ -1,0 +1,9 @@
+_require "basis.smi"
+
+structure BitReader =
+struct
+    type t(= boxed)
+    val bitReader: Word8.word vector -> int -> Word8.word -> t
+    val readBit: t -> Word8.word
+    val readNBits: t -> int -> Word8.word
+end

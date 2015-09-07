@@ -1,0 +1,11 @@
+_require "basis.smi"
+_require "ext.smi"
+
+structure Buffer =
+struct
+    type 'a t(= boxed)
+    val make: int * 'a -> 'a t
+    val push: 'a t -> 'a -> unit
+    val extend: 'a t -> 'a array -> unit
+    val array: 'a t -> 'a array
+end

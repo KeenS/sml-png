@@ -1,0 +1,5 @@
+_require "basis.smi"
+_require "ByteOrder.smi"
+
+structure ZLib = struct
+end

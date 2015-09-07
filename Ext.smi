@@ -1,0 +1,11 @@
+_require "basis.smi"
+
+structure Ext = struct
+    structure Array = struct
+        val subseq: 'a array -> {si: int, ei: int} -> 'a array
+    end
+    structure Vector = struct
+        val subseqArray: 'a vector -> {si: int, ei: int} -> 'a array
+        val subseq: 'a vector -> {si: int, ei: int} -> 'a vector
+    end
+end

@@ -1,0 +1,7 @@
+_require "basis.smi"
+
+structure Huffman = struct
+    type 'a t (=boxed)
+    val decode: 'a t -> word -> int -> 'a option
+    val import: (word * int * 'a) list -> 'a t
+end
