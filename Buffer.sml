@@ -25,6 +25,9 @@ struct
           pRef := p + 1
       end
 
+    fun getPoint ({pointer = ref p, ...}:'a t) = p
+    fun subseq ({data = ref data,...}:'a t) index = Ext.Array.subseq data index
+
     fun extend buf array = let
         fun loop i = (push buf (Array.sub(array, i)); loop (i + 1))
     in

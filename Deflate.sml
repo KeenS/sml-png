@@ -26,11 +26,11 @@ structure Deflate = struct
       let val b = Word8.toLargeWord(BR.readNBits br 7)
       in case Huffman.decode fixedHuffmanTree b 7 of
              SOME(v) =>  v
-           | NONE => let val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit b)
+           | NONE => let val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit br)
                      in case Huffman.decode fixedHuffmanTree b 8 of
                             SOME(v) => v
-                          | NONE => let val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit b)
-                                    in case Huffman.decode fixedHuffmanTree word 9 of
+                          | NONE => let val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit br)
+                                    in case Huffman.decode fixedHuffmanTree b 9 of
                                            SOME(v) => v
                                          | NONE => raise Fail "Invalid Huffman encode"
                                     end
@@ -62,27 +62,31 @@ structure Deflate = struct
           then 32 * (v - 281) + 115 + (Word8.toInt(BR.readNBits br 5))
           else 258
         fun getDist v br =
-          if 0 <= v andalso v <= 3
+          if 0 = v andalso v = 1
           then v + 1
-          else if v = 4 orelse v = 5
-          then 1 * (v - 4) + 5
-          else if v = 6 orelse v = 7
-          then 2 * (v - v) + 9
+          else let
+              val v_2 = v div 2
+              val n = v_2 - 1
+          in
+              Word.toInt(Word.<<(Word.fromInt(v - v_2), Word.fromInt n)) + 3 + Word.toInt(Word.<<(0w1, Word.fromInt (n + 1))) + (Word8.toInt(BR.readNBits br n))
+          end
+
         exception Exit
-        fun pushVal v br = if 0 <= v andalso v <= 255
-                          then Buffer.push buf v
+        fun pushVal v = if 0 <= v andalso v <= 255
+                          then Buffer.push buf (Word8.fromInt v)
                           else if v = 256
                           then raise Exit
                           else let
                               val len = getLen v br
                               val dist = getDist (decodeVal br)  br
+                              val i = Buffer.getPoint buf
+                              val subseq = Buffer.subseq buf {si = i - dist, ei = i - dist + len}
                           in
-                              Buffer.extend buf xxx
+                              Buffer.extend buf subseq
                           end
         fun loop () = let
-            val byte = Word8.toLargeWord (getByte data i)
             val v = decodeVal br
-            val () = pushVal v br
+            val () = pushVal v
         in
             loop ()
         end
@@ -90,27 +94,28 @@ structure Deflate = struct
         loop ()
         handle Exit => ()
     end
-    fun blockDynamic buf data i = ()
-    fun blockReserved buf data i = raise Fail "reserved block type can't be used."
+    fun blockDynamic buf br = ()
+    fun blockReserved buf br = raise Fail "reserved block type can't be used."
 
     fun deflate data = let
         val buf = Buffer.make(0, 0w0: word8)
         val br  = BR.bitReader data 0 0w0
-        fun loop i = let
+        fun loop () = let
             val bfinal = BR.readBit br
-            val btype = BR.readNBit br 2
-            val i = case btype of
+            val btype = BR.readNBits br 2
+            val () = case btype of
                         0w0 => blockNo buf br
                       | 0w1 => blockFixed buf br
-                      | 0w2 =>  blockDynamic buf br
+                      | 0w2 => blockDynamic buf br
                       | 0w3 => blockReserved buf br
                       | _   =>  raise Fail "logic flow"
         in
-            if bfinal then ()
-            else loop (i+1)
+            if bfinal = 0wx1 then ()
+            else loop ()
         end
         in
-            loop 0;
+            loop ()
+            handle Subscript => ();
             Buffer.array buf
         end
 end
