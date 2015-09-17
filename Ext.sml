@@ -3,7 +3,7 @@ struct
     structure Array = struct
         open Array
         fun subseq array {si = si, ei = ei} = 
-          if ei <= si orelse si < 0 orelse Array.length array < ei
+          if ei <= si
           then raise Subscript
           else let
               val elm = Array.sub(array, si)

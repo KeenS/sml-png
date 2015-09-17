@@ -100,34 +100,50 @@ structure Deflate = struct
         loop ()
         handle Exit => ()
     end
-    fun blockDynamic buf br = let
-        val hlit = (BR.readNBits br 5) + 0w257
-        val hdist = BR.readNBits br 5
-        val hclen = Word8.toInt(((BR.readNBits 4) + 0w4) * 0w3)
-        val order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
-        val blCount = Array.array(16, 0)
-        fun collectLen 0 order acc = ()
-          | collectLen hlen (v::vs) acc = let
-              val codeLen = BR.readNBits br 3
-              val () = Array.update(blCount, codeLen, (Array.sub(blCount, codeLen)) + 1)
-          in
-              if codeLen > 0
-              then collectLen (hlen - 3) vs ((v, codeLen)::acc)
-              else collectLen (hlen - 3) vs acc
-          end
-          | collectLen _ [] _ = raise Fail "logic flaw"
-        val pairs = loop hclen order []
-        val nextCode = Array.array(16, 0w0)
+
+    fun importDynamic pairs = let
+        val len = List.length pairs
+        val maxBits = List.foldl (fn ((_,len), acc) => if acc < len then len else acc) 0 pairs
+        val blCount = Array.array(maxBits+1, 0w0)
+        val nextCode = Array.array(maxBits+1, 0w0)
         fun findSmallest i code = let
-            val code = Word.<<(code + (Array.sub(blCount, i - 1)), 1)
+            val () = print "called0\n"
+            val code = Word.<<(code + (Array.sub(blCount, i - 1)), 0w1)
+            val () = print "called1\n"
             val () = Array.update(nextCode, i, code)
+            val () = print "called2\n"
         in
-            if i = 16 then ()
+            if i = maxBits then ()
             else findSmallest (i + 1) code
         end
+        val () = List.app (fn (_, len) => Array.update(blCount, len, 0w1+Array.sub(blCount, len))) pairs
         val () = findSmallest 1 0w0
-        val table = Huffman.import 
+        val table = List.map (fn (v,len) => let val code = Array.sub(nextCode, len)
+                                            in (code, len, v) before Array.update(nextCode, len, code+0w1)
+                                            end) pairs
+        val () = print (Show.showList (Show.show3Tuple (Word.toString, Int.toString, Int.toString)) table)
     in
+       Huffman.import table
+    end
+
+    fun blockDynamic buf br = let
+        val hlit = (Word8.toLargeWord(BR.readNBits br 5)) + 0w257
+        val hdist = BR.readNBits br 5
+        val hclen = ((Word8.toInt(BR.readNBits br 4)) + 4)
+        val order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
+        fun collectLen 0 order acc = acc
+          | collectLen hlen (v::vs) acc = let
+              val codeLen = Word8.toInt (BR.readNBits br 3)
+          in
+              if codeLen > 0
+              then collectLen (hlen - 1) vs ((v, codeLen)::acc)
+              else collectLen (hlen - 1) vs acc
+          end
+          | collectLen _ [] _ = raise Fail "logic flaw"
+        val pairs = collectLen hclen order []
+        val table = importDynamic pairs
+    in
+        ()
     end
     fun blockReserved buf br = raise Fail "reserved block type can't be used."
     fun deflate data = let
