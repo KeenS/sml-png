@@ -5,6 +5,23 @@ signature READER_SIG = sig
 end
 
 
+fun printW8Vec vec = let
+    fun loop i = let
+        val w8 = Vector.sub(vec, i)
+        val w8 = Word8.toString w8
+        val w8 = "0wx" ^ w8
+    in
+        print(w8 ^ ", ")
+      ; loop (i + 1)
+    end
+in
+    print "["
+  ; loop 0
+    handle Subscript => ()
+  ; print "]" 
+end
+
+
 functor PNGFun(Reader: READER_SIG) = struct
     val op << = Word.<<
     val op >> = Word.>>
@@ -119,7 +136,11 @@ functor PNGFun(Reader: READER_SIG) = struct
         {r = r, g = g, b = b}
     end
 
-    fun parseIDAT data = data
+    fun parseIDAT data = let
+        val _ = ZLib.parseZLib data
+    in
+        data
+    end
 
     (* fun alfaSeparate img = img *)
     (* fun indexize img = img *)

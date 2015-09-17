@@ -39,9 +39,12 @@ structure Deflate = struct
 
     fun blockNo buf br = let
         val ()  = BR.nextBoundary br
-        val len = Word8.toInt(BR.readByte br)
-        val nlen = Word8.toInt(BR.readByte br)
-        val true = len + nlen = 0xff
+        val len = Word8.toInt(BR.readByte br) + (Word8.toInt(BR.readByte br) * 256)
+        val nlen = Word8.toInt(BR.readByte br) + (Word8.toInt(BR.readByte br) * 256)
+        val () = print ((Int.toString len) ^ "\n")
+        val () = print ((Int.toString nlen) ^ "\n")
+        val () = print ((Int.toString (len + nlen)) ^ "\n")
+        val true = len + nlen = 0xffff
     in
         Buffer.extendVec buf (BR.readNBytes br len)
     end
@@ -80,6 +83,9 @@ structure Deflate = struct
                               val len = getLen v br
                               val dist = getDist (decodeVal br)  br
                               val i = Buffer.getPoint buf
+                              val () = print ("start: " ^ (Int.toString (i - dist)) ^ "\n")
+                              val () = print ("end: " ^ (Int.toString (i - dist + len)) ^ "\n")
+                              val () = print ("length: " ^ (Int.toString len) ^ "\n")                                             
                               val subseq = Buffer.subseq buf {si = i - dist, ei = i - dist + len}
                           in
                               Buffer.extend buf subseq
@@ -94,9 +100,36 @@ structure Deflate = struct
         loop ()
         handle Exit => ()
     end
-    fun blockDynamic buf br = ()
+    fun blockDynamic buf br = let
+        val hlit = (BR.readNBits br 5) + 0w257
+        val hdist = BR.readNBits br 5
+        val hclen = Word8.toInt(((BR.readNBits 4) + 0w4) * 0w3)
+        val order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
+        val blCount = Array.array(16, 0)
+        fun collectLen 0 order acc = ()
+          | collectLen hlen (v::vs) acc = let
+              val codeLen = BR.readNBits br 3
+              val () = Array.update(blCount, codeLen, (Array.sub(blCount, codeLen)) + 1)
+          in
+              if codeLen > 0
+              then collectLen (hlen - 3) vs ((v, codeLen)::acc)
+              else collectLen (hlen - 3) vs acc
+          end
+          | collectLen _ [] _ = raise Fail "logic flaw"
+        val pairs = loop hclen order []
+        val nextCode = Array.array(16, 0w0)
+        fun findSmallest i code = let
+            val code = Word.<<(code + (Array.sub(blCount, i - 1)), 1)
+            val () = Array.update(nextCode, i, code)
+        in
+            if i = 16 then ()
+            else findSmallest (i + 1) code
+        end
+        val () = findSmallest 1 0w0
+        val table = Huffman.import 
+    in
+    end
     fun blockReserved buf br = raise Fail "reserved block type can't be used."
-
     fun deflate data = let
         val buf = Buffer.make(0, 0w0: word8)
         val br  = BR.bitReader data 0 0w0
@@ -108,7 +141,7 @@ structure Deflate = struct
                       | 0w1 => blockFixed buf br
                       | 0w2 => blockDynamic buf br
                       | 0w3 => blockReserved buf br
-                      | _   =>  raise Fail "logic flow"
+                      | _   =>  raise Fail "logic flaw"
         in
             if bfinal = 0wx1 then ()
             else loop ()
@@ -119,3 +152,5 @@ structure Deflate = struct
             Buffer.array buf
         end
 end
+
+val _ = Deflate.deflate (Vector.fromList[0wxED, 0wxD2, 0wxC1, 0wx9, 0wx2, 0wx1, 0wxC, 0wx0, 0wxC1, 0wx20, 0wx3E, 0wxEC, 0wxBF, 0wx89, 0wx6B, 0wxC7, 0wx82, 0wx84, 0wxF3, 0wx63, 0wx7, 0wx1B, 0wx38, 0wxC5, 0wx19, 0wxC8, 0wx37, 0wx24, 0wxB0, 0wx33, 0wxBB, 0wx8E, 0wx99, 0wx39, 0wxBF, 0wx74, 0wx1E, 0wxCB, 0wxBF, 0wxF2, 0wx71, 0wxBB, 0wxFA, 0wx0, 0wx7E, 0wx9F, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wxDD, 0wx97, 0wxF7, 0wx1D, 0wx33, 0wxF3, 0wx5C, 0wxDE, 0wxB9, 0wxE5, 0wx75, 0wxF5, 0wx1, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wxF0, 0wx4F, 0wxDE, 0wx2A, 0wx92])
