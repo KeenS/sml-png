@@ -22,7 +22,7 @@ structure CRC = struct
     fun calc vec = let
         val len = Vector.length vec
         fun loop crc i = let
-            val index = Word.toInt (andb((xorb(crc, Vector.sub(vec, i))), 0wxff))
+            val index = Word.toInt (andb((xorb(crc, Word8.toLargeWord(Vector.sub(vec, i)))), 0wxff))
         in
             if i = len then crc
             else loop (xorb(Vector.sub(table, index), >>(crc, 0w8))) (i + 1)
