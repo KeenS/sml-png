@@ -1,6 +1,5 @@
 _require "basis.smi"
 _require "ByteOrder.smi"
-_require "Ext.smi"
 _require "Buffer.smi"
 _require "BitReader.smi"
 _require "Huffman.smi"

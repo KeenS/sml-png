@@ -202,15 +202,15 @@ functor PNGFun(Reader: READER_SIG) = struct
 end
 
 structure PNG = PNGFun(BinIO)
-fun printW8Vec vec = let
-    fun loop i = let
-        val w8 = Vector.sub(vec, i)
-        val w8 = Word8.toString w8
-    in
-        print(w8 ^ ", ");
-        loop (i + 1)
-    end
-in
-    loop 0
-    handle Subscript => ()
-end
+(* fun printW8Vec vec = let *)
+(*     fun loop i = let *)
+(*         val w8 = Vector.sub(vec, i) *)
+(*         val w8 = Word8.toString w8 *)
+(*     in *)
+(*         print(w8 ^ ", "); *)
+(*         loop (i + 1) *)
+(*     end *)
+(* in *)
+(*     loop 0 *)
+(*     handle Subscript => () *)
+(* end *)

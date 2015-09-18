@@ -22,20 +22,22 @@ structure Deflate = struct
         Huffman.import (List.concat [table1, table2, table3, table4])
     end
 
-    fun decodeVal br table =
-      let val b = Word8.toLargeWord(BR.readNBitsHuffman br 7)
-      in case Huffman.decode table b 7 of
-             SOME(v) =>  v
-           | NONE => let val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit br)
-                     in case Huffman.decode table b 8 of
-                            SOME(v) => v
-                          | NONE => let val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit br)
-                                    in case Huffman.decode table b 9 of
-                                           SOME(v) => v
-                                         | NONE => raise Fail "Invalid Huffman encode"
-                                    end
-                     end
-      end
+    fun decodeVal br table least most =  let
+        fun loop n b = if n = most
+                       then raise Fail "Invalid Huffman encode"
+                       else let
+                           val () = print ("called"^ (Int.toString n)^"\n")
+                           val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit br)
+                           val () = print ("called"^ (Int.toString n)^"\n")
+                            in
+                                case Huffman.decode table b n of
+                                    SOME(v) => v
+                                  | NONE => loop (n+1) b
+                            end
+        val b = Word8.toLargeWord(BR.readNBitsHuffman br (least - 1))
+    in
+        loop least b
+    end
 
     fun blockNo buf br = let
         val ()  = BR.nextBoundary br
@@ -86,7 +88,7 @@ structure Deflate = struct
                           then raise Exit
                           else let
                               val len = getLen v br
-                              val dist = getDist (decodeVal br fixedHuffmanTree) br
+                              val dist = getDist (decodeVal br fixedHuffmanTree 7 9) br
                               val i = Buffer.getPoint buf
                               val () = print ("i: " ^ (Int.toString (i)) ^ "\n")
                               val () = print ("start: " ^ (Int.toString (i - dist)) ^ "\n")
@@ -97,7 +99,7 @@ structure Deflate = struct
                               Buffer.extend buf subseq
                           end
         fun loop () = let
-            val v = decodeVal br fixedHuffmanTree
+            val v = decodeVal br fixedHuffmanTree 7 9
             val () = print ("decoded: " ^ (Int.toString v) ^ "\n")
             val () = pushVal v
         in
@@ -126,18 +128,16 @@ structure Deflate = struct
                                             in (code, len, v) before Array.update(nextCode, len, code+0w1)
                                             end) pairs
         val () = print (Show.showList (Show.show3Tuple (Word.toString, Int.toString, Int.toString)) table)
-        (* fun getLen () =  *)
     in
        Huffman.import table
     end
 
     fun blockDynamic buf br = let
-        val hlit = (Word8.toLargeWord(BR.readNBits br 5)) + 0w257
+        val hlit = Word.toInt((Word8.toLargeWord(BR.readNBits br 5)) + 0w257)
         val hdist = BR.readNBits br 5
         val hclen = ((Word8.toInt(BR.readNBits br 4)) + 4)
-        val () = print ((Int.toString (hclen)) ^ "\n")
         val order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
-        fun collectLen 0 order acc = acc
+        fun collectLen 0 order acc = List.rev acc
           | collectLen hlen (v::vs) acc = let
               val codeLen = Word8.toInt (BR.readNBits br 3)
           in
@@ -146,7 +146,11 @@ structure Deflate = struct
               else collectLen (hlen - 1) vs acc
           end
           | collectLen _ [] _ = raise Fail "logic flaw"
-        val pairs = collectLen hclen order []
+        val tablePairs = collectLen hclen order []
+        val tableTable = importDynamic tablePairs
+        fun loop n acc = if n = hlit then List.rev acc
+                         else (print ("called"^ (Int.toString n)^"\n"); loop (n+1) ((n, decodeVal br tableTable 1 7)::acc))
+        val pairs = loop 0 []
         val table = importDynamic pairs
     in
         ()
@@ -176,4 +180,4 @@ structure Deflate = struct
         end
 end
 
-val _ = Deflate.deflate (Vector.fromList [0wx2, 0wx1, 0wxC, 0wx0, 0wxC1, 0wx20, 0wx3E, 0wxEC, 0wxBF, 0wx89, 0wx6B, 0wxC7, 0wx82, 0wx84, 0wxF3, 0wx63, 0wx7, 0wx1B, 0wx38, 0wxC5, 0wx19, 0wxC8, 0wx37, 0wx24, 0wxB0, 0wx33, 0wxBB, 0wx8E, 0wx99, 0wx39, 0wxBF, 0wx74, 0wx1E, 0wxCB, 0wxBF, 0wxF2, 0wx71, 0wxBB, 0wxFA, 0wx0, 0wx7E, 0wx9F, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wxDD, 0wx97, 0wxF7, 0wx1D, 0wx33, 0wxF3, 0wx5C, 0wxDE, 0wxB9, 0wxE5, 0wx75, 0wxF5, 0wx1, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wxF0, 0wx4F, 0wxDE, 0wx2A, 0wx92, 0wx29, 0wx4B])
+val _ = Deflate.deflate (Vector.fromList [0wxED, 0wxD9, 0wxB1, 0wxD, 0wx80, 0wx40, 0wx10, 0wxC4, 0wx40, 0wx1F, 0wxA2, 0wxFF, 0wx96, 0wx21, 0wxA0, 0wx82, 0wxF, 0wx2C, 0wx74, 0wx92, 0wx27, 0wxD9, 0wxD4, 0wxF9, 0wxE, 0wxF0, 0wxB0, 0wxC8, 0wxFD, 0wxCD, 0wx96, 0wxE6, 0wxE1, 0wxFA, 0wx3B, 0wxE1, 0wx54, 0wxC1, 0wxB6, 0wx82, 0wx6D, 0wx5, 0wxDB, 0wxA, 0wxB6, 0wx15, 0wx6C, 0wx2B, 0wxD8, 0wx56, 0wxB0, 0wxAD, 0wx60, 0wx5B, 0wxC1, 0wxB6, 0wx82, 0wx6D, 0wx5, 0wxDB, 0wxA, 0wxB6, 0wx15, 0wx6C, 0wx2B, 0wxD8, 0wx56, 0wxB0, 0wxAD, 0wx60, 0wx5B, 0wxC1, 0wxB6, 0wx61, 0wxCF, 0wxC1, 0wx1, 0wxC0, 0wxB, 0wx97, 0wxD4, 0wx3, 0wx4B])
