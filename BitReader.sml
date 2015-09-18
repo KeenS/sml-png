@@ -4,14 +4,14 @@ struct
     type t = {data: word8 vector, i: int ref, bi: word8 ref}
 
     fun getBit word8 bi = 
-        Word8.andb(Word8.>>(word8, Word8.toLargeWord(0wx7 - bi)), 0wx1) 
+        Word8.andb(Word8.>>(word8, Word8.toLargeWord bi), 0wx1) 
     fun getNBit word8 bi bn =
       let val word8 = Word8.<<(word8, bi)
       in Word8.>>(word8, 0wx8 - bn) end
 
     fun seek ({i = (iRef as ref i), bi = (biRef as ref bi), ...}: t) = let
         val ()   = biRef := (bi + 0wx1) mod 0wx8
-        val ()   = iRef := (if bi = 0w7
+        val ()   = iRef := (if (!biRef) = 0wx0
                            then i + 1
                            else i)
     in
@@ -28,12 +28,23 @@ struct
         bit
     end
     fun readNBits t bn = let
+        val bn = Word.fromInt bn
         (* :TODO: optimize *)
+        fun loop n w = if n = bn
+                       then w
+                       else loop (n + 0w1) (Word8.<<((readBit t), n) + w)
+    in
+        loop 0w0 0w0
+    end
+
+    fun readNBitsHuffman t bn = let
         fun loop 0 w = w
-          | loop i w = loop (i - 1) (Word8.<<(w, 0wx1) + (readBit t))
+          | loop i w = loop (i - 1) (Word8.<<(w, 0w1) + (readBit t))
     in
         loop bn 0w0
     end
+
+
     fun nextBoundary (t:t as {i = iRef as ref i, bi = biRef as ref bi, ...}) = 
       if bi = 0w0
       then ()
