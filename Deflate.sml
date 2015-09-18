@@ -22,15 +22,15 @@ structure Deflate = struct
         Huffman.import (List.concat [table1, table2, table3, table4])
     end
 
-    fun decodeVal br =
-      let val b = Word8.toLargeWord(BR.readNBits br 7)
-      in case Huffman.decode fixedHuffmanTree b 7 of
+    fun decodeVal br table =
+      let val b = Word8.toLargeWord(BR.readNBitsHuffman br 7)
+      in case Huffman.decode table b 7 of
              SOME(v) =>  v
            | NONE => let val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit br)
-                     in case Huffman.decode fixedHuffmanTree b 8 of
+                     in case Huffman.decode table b 8 of
                             SOME(v) => v
                           | NONE => let val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit br)
-                                    in case Huffman.decode fixedHuffmanTree b 9 of
+                                    in case Huffman.decode table b 9 of
                                            SOME(v) => v
                                          | NONE => raise Fail "Invalid Huffman encode"
                                     end
@@ -39,12 +39,16 @@ structure Deflate = struct
 
     fun blockNo buf br = let
         val ()  = BR.nextBoundary br
-        val len = Word8.toInt(BR.readByte br) + (Word8.toInt(BR.readByte br) * 256)
-        val nlen = Word8.toInt(BR.readByte br) + (Word8.toInt(BR.readByte br) * 256)
-        val () = print ((Int.toString len) ^ "\n")
-        val () = print ((Int.toString nlen) ^ "\n")
-        val () = print ((Int.toString (len + nlen)) ^ "\n")
-        val true = len + nlen = 0xffff
+        val len = Word8.toLargeWord(BR.readByte br)
+        val len = len + (Word8.toLargeWord(BR.readByte br) * 0w256)
+        val nlen = Word8.toLargeWord(BR.readByte br)
+        val nlen = nlen + (Word8.toLargeWord(BR.readByte br) * 0w256)
+        val nnlen =  Word.andb(Word.notb(nlen),0wxffff)
+        val () = print ((Word.toString len) ^ "\n")
+        val () = print ((Word.toString nlen) ^ "\n")
+        val () = print ((Word.toString nnlen) ^ "\n")
+        val true = len = nnlen
+        val len = Word.toInt len
     in
         Buffer.extendVec buf (BR.readNBytes br len)
     end
@@ -64,6 +68,7 @@ structure Deflate = struct
           else if 281 <= v andalso v <= 284
           then 32 * (v - 281) + 115 + (Word8.toInt(BR.readNBits br 5))
           else 258
+
         fun getDist v br =
           if 0 = v andalso v = 1
           then v + 1
@@ -81,8 +86,9 @@ structure Deflate = struct
                           then raise Exit
                           else let
                               val len = getLen v br
-                              val dist = getDist (decodeVal br)  br
+                              val dist = getDist (decodeVal br fixedHuffmanTree) br
                               val i = Buffer.getPoint buf
+                              val () = print ("i: " ^ (Int.toString (i)) ^ "\n")
                               val () = print ("start: " ^ (Int.toString (i - dist)) ^ "\n")
                               val () = print ("end: " ^ (Int.toString (i - dist + len)) ^ "\n")
                               val () = print ("length: " ^ (Int.toString len) ^ "\n")                                             
@@ -91,7 +97,8 @@ structure Deflate = struct
                               Buffer.extend buf subseq
                           end
         fun loop () = let
-            val v = decodeVal br
+            val v = decodeVal br fixedHuffmanTree
+            val () = print ("decoded: " ^ (Int.toString v) ^ "\n")
             val () = pushVal v
         in
             loop ()
@@ -107,11 +114,8 @@ structure Deflate = struct
         val blCount = Array.array(maxBits+1, 0w0)
         val nextCode = Array.array(maxBits+1, 0w0)
         fun findSmallest i code = let
-            val () = print "called0\n"
             val code = Word.<<(code + (Array.sub(blCount, i - 1)), 0w1)
-            val () = print "called1\n"
             val () = Array.update(nextCode, i, code)
-            val () = print "called2\n"
         in
             if i = maxBits then ()
             else findSmallest (i + 1) code
@@ -122,6 +126,7 @@ structure Deflate = struct
                                             in (code, len, v) before Array.update(nextCode, len, code+0w1)
                                             end) pairs
         val () = print (Show.showList (Show.show3Tuple (Word.toString, Int.toString, Int.toString)) table)
+        (* fun getLen () =  *)
     in
        Huffman.import table
     end
@@ -130,6 +135,7 @@ structure Deflate = struct
         val hlit = (Word8.toLargeWord(BR.readNBits br 5)) + 0w257
         val hdist = BR.readNBits br 5
         val hclen = ((Word8.toInt(BR.readNBits br 4)) + 4)
+        val () = print ((Int.toString (hclen)) ^ "\n")
         val order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
         fun collectLen 0 order acc = acc
           | collectLen hlen (v::vs) acc = let
@@ -145,6 +151,7 @@ structure Deflate = struct
     in
         ()
     end
+
     fun blockReserved buf br = raise Fail "reserved block type can't be used."
     fun deflate data = let
         val buf = Buffer.make(0, 0w0: word8)
@@ -169,4 +176,4 @@ structure Deflate = struct
         end
 end
 
-val _ = Deflate.deflate (Vector.fromList[0wxED, 0wxD2, 0wxC1, 0wx9, 0wx2, 0wx1, 0wxC, 0wx0, 0wxC1, 0wx20, 0wx3E, 0wxEC, 0wxBF, 0wx89, 0wx6B, 0wxC7, 0wx82, 0wx84, 0wxF3, 0wx63, 0wx7, 0wx1B, 0wx38, 0wxC5, 0wx19, 0wxC8, 0wx37, 0wx24, 0wxB0, 0wx33, 0wxBB, 0wx8E, 0wx99, 0wx39, 0wxBF, 0wx74, 0wx1E, 0wxCB, 0wxBF, 0wxF2, 0wx71, 0wxBB, 0wxFA, 0wx0, 0wx7E, 0wx9F, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wxDD, 0wx97, 0wxF7, 0wx1D, 0wx33, 0wxF3, 0wx5C, 0wxDE, 0wxB9, 0wxE5, 0wx75, 0wxF5, 0wx1, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wxF0, 0wx4F, 0wxDE, 0wx2A, 0wx92])
+val _ = Deflate.deflate (Vector.fromList [0wx2, 0wx1, 0wxC, 0wx0, 0wxC1, 0wx20, 0wx3E, 0wxEC, 0wxBF, 0wx89, 0wx6B, 0wxC7, 0wx82, 0wx84, 0wxF3, 0wx63, 0wx7, 0wx1B, 0wx38, 0wxC5, 0wx19, 0wxC8, 0wx37, 0wx24, 0wxB0, 0wx33, 0wxBB, 0wx8E, 0wx99, 0wx39, 0wxBF, 0wx74, 0wx1E, 0wxCB, 0wxBF, 0wxF2, 0wx71, 0wxBB, 0wxFA, 0wx0, 0wx7E, 0wx9F, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wx89, 0wx88, 0wx4C, 0wx44, 0wx64, 0wx22, 0wx22, 0wx13, 0wx11, 0wx99, 0wx88, 0wxC8, 0wx44, 0wx44, 0wx26, 0wx22, 0wx32, 0wx11, 0wx91, 0wxDD, 0wx97, 0wxF7, 0wx1D, 0wx33, 0wxF3, 0wx5C, 0wxDE, 0wxB9, 0wxE5, 0wx75, 0wxF5, 0wx1, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wx0, 0wxF0, 0wx4F, 0wxDE, 0wx2A, 0wx92, 0wx29, 0wx4B])
