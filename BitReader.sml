@@ -11,7 +11,7 @@ struct
 
     fun seek ({i = (iRef as ref i), bi = (biRef as ref bi), ...}: t) = let
         val ()   = biRef := (bi + 0wx1) mod 0wx8
-        val ()   = iRef := (if bi = 0w0
+        val ()   = iRef := (if bi = 0w7
                            then i + 1
                            else i)
     in
