@@ -26,9 +26,9 @@ structure Deflate = struct
         fun loop n b = if n = most
                        then raise Fail "Invalid Huffman encode"
                        else let
-                           val () = print ("called"^ (Int.toString n)^"\n")
+                           val () = print ("called1 "^ (Int.toString least)^"\n")
                            val b = Word.<<(b, 0wx1) + Word8.toLargeWord(BR.readBit br)
-                           val () = print ("called"^ (Int.toString n)^"\n")
+                           val () = print ("called2 "^ (Int.toString n)^"\n")
                             in
                                 case Huffman.decode table b n of
                                     SOME(v) => v
@@ -148,6 +148,7 @@ structure Deflate = struct
           | collectLen _ [] _ = raise Fail "logic flaw"
         val tablePairs = collectLen hclen order []
         val tableTable = importDynamic tablePairs
+        val () = print ("hlit"^ (Int.toString hlit)^"\n")
         fun loop n acc = if n = hlit then List.rev acc
                          else (print ("called"^ (Int.toString n)^"\n"); loop (n+1) ((n, decodeVal br tableTable 1 7)::acc))
         val pairs = loop 0 []

@@ -50,8 +50,9 @@ struct
       then ()
       else iRef := i + 1 before biRef := 0w0
     fun readByte t = readNBits t 8
-    fun readNBytes (t:t as {data = data, i = iRef as ref i,...}) len = let
+    fun readNBytes (t:t as {data = data, i = iRef as ref i, bi = biRef as ref bi}) len = let
         (* intentionally ignoring bi *)
+        val () = biRef := 0w0
         val ret = VectorSlice.vector (VectorSlice.slice(data, i, SOME(i + len)))
         val ()  = iRef := i + len
     in
